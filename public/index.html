@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Docket — AI edits your file, same format back</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="grain"></div>
+
+  <header class="topbar">
+    <div class="wordmark">
+      <span class="wordmark-glyph">D</span>
+      <span>Docket</span>
+    </div>
+    <div class="topbar-note">No login. Nothing saved. Same format back.</div>
+  </header>
+
+  <main>
+    <section id="screen-gate" class="screen screen-active">
+      <div class="intro">
+        <h1>Approved access only.</h1>
+        <p class="intro-sub">This tool isn't open to the public. Request access and the operator will email you a one-time code when approved.</p>
+      </div>
+
+      <div class="gate-card">
+        <div class="gate-tabs">
+          <button class="gate-tab gate-tab-active" data-tab="redeem" type="button">I have a code</button>
+          <button class="gate-tab" data-tab="request" type="button">Request access</button>
+        </div>
+
+        <div id="gate-panel-redeem" class="gate-panel">
+          <label for="codeInput">Access code <span class="optional-tag">single-use, valid for 1 hour</span></label>
+          <input id="codeInput" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" />
+          <button id="redeemBtn" class="btn-primary">Continue</button>
+          <p id="redeemError" class="gate-error hidden"></p>
+        </div>
+
+        <div id="gate-panel-request" class="gate-panel hidden">
+          <label for="emailInput">Your email</label>
+          <input id="emailInput" type="email" autocomplete="email" placeholder="you@example.com" />
+          <label for="reasonInput">Why you'd like access <span class="optional-tag">optional</span></label>
+          <textarea id="reasonInput" placeholder="Helps the operator decide — a sentence is plenty."></textarea>
+          <button id="requestBtn" class="btn-primary">Submit request</button>
+          <p id="requestMessage" class="gate-message hidden"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-upload" class="screen">
+      <div class="intro">
+        <h1>Drop a file. Get it back better.<br/>Same format, same intent — sharper.</h1>
+        <p class="intro-sub">Word stays Word. Excel stays Excel. PowerPoint stays PowerPoint. The AI polishes wording, structure, and formatting — your facts and figures don't move.</p>
+      </div>
+
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a file">
+        <input type="file" id="fileInput" accept=".docx,.xlsx,.xls,.csv,.pptx,.ppt,.doc,.pdf,.txt" hidden />
+        <div class="dropzone-inner">
+          <svg class="dropzone-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <path d="M24 6V30M24 6L15 15M24 6L33 15" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 30V36C8 38.2091 9.79086 40 12 40H36C38.2091 40 40 38.2091 40 36V30" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p class="dropzone-label">Drag a file here, or <span class="link-text">browse</span></p>
+          <p class="dropzone-types">DOCX · XLSX · CSV · PPTX · PDF · TXT — up to 25MB</p>
+        </div>
+      </div>
+
+      <div id="fileChip" class="file-chip hidden">
+        <div class="file-chip-icon" id="fileChipIcon">DOC</div>
+        <div class="file-chip-info">
+          <div class="file-chip-name" id="fileChipName"></div>
+          <div class="file-chip-size" id="fileChipSize"></div>
+        </div>
+        <button class="file-chip-remove" id="fileChipRemove" aria-label="Remove file">&times;</button>
+      </div>
+
+      <div id="instructionBox" class="instruction-box hidden">
+        <label for="instructionInput">Custom instruction <span class="optional-tag">optional — leave blank for a standard polish pass</span></label>
+        <textarea id="instructionInput" placeholder="e.g. &quot;Make this more concise&quot;, &quot;Fix grammar only, don't reword&quot;, &quot;Summarize each section&quot;, &quot;Add totals to the Revenue sheet&quot;"></textarea>
+      </div>
+
+      <button id="processBtn" class="btn-primary hidden" disabled>
+        <span>Improve this file</span>
+      </button>
+
+      <div id="aiWarning" class="ai-warning hidden">
+        AI isn't ready yet. Make sure Ollama is running and the model is pulled (<code>ollama pull gemma3:4b</code>).
+      </div>
+    </section>
+
+    <section id="screen-processing" class="screen">
+      <div class="processing-card">
+        <div class="spinner" aria-hidden="true"></div>
+        <h2 id="processingTitle">Reading your file&hellip;</h2>
+        <ul class="steps" id="processingSteps">
+          <li data-step="parse">Extracting content</li>
+          <li data-step="ai">AI editing pass</li>
+          <li data-step="build">Rebuilding the file</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="screen-done" class="screen">
+      <div class="done-card">
+        <div class="done-icon" aria-hidden="true">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="15" stroke="currentColor" stroke-width="2"/>
+            <path d="M10 16.5L14 20.5L22 11.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2>Your file is ready</h2>
+        <p id="doneSummary" class="done-summary"></p>
+        <a id="downloadBtn" class="btn-primary" download>
+          <span id="downloadLabel">Download file</span>
+        </a>
+        <button id="startOverBtn" class="btn-secondary">Edit another file</button>
+      </div>
+    </section>
+
+    <section id="screen-error" class="screen">
+      <div class="error-card">
+        <div class="error-icon" aria-hidden="true">!</div>
+        <h2>Something didn't work</h2>
+        <p id="errorMessage" class="error-message"></p>
+        <button id="errorRetryBtn" class="btn-secondary">Try again</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot-note">Files are processed in memory and discarded after download. No accounts, no tracking.</footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

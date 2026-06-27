@@ -1,0 +1,31 @@
+{
+  "name": "docedit-ai",
+  "version": "1.0.0",
+  "description": "Upload a Word, Excel, PowerPoint, PDF, or text file. AI polishes or edits it. Download it back in the same format. No login required.",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "docx": "^9.7.1",
+    "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.0",
+    "multer": "^2.2.0",
+    "nodemailer": "^6.9.16",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.10.38",
+    "pptxgenjs": "^4.0.1"
+  }
+}
