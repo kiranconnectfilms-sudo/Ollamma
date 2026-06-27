@@ -6,8 +6,6 @@ const express = require('express');
 const path = require('path');
 
 const editRoute = require('./routes/edit');
-const adminRoute = require('./routes/admin');
-const accessRoute = require('./routes/access');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,8 +40,6 @@ app.get('/api/health', async (req, res) => {
 });
 
 app.use('/api', editRoute);
-app.use('/api', accessRoute);
-app.use('/admin', adminRoute);
 
 app.use((err, req, res, next) => {
   if (err && err.code === 'LIMIT_FILE_SIZE') {

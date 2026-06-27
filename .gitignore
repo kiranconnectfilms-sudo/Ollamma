@@ -2,11 +2,6 @@ node_modules/
 .env
 uploads/*
 outputs/*
-data/
-*.db
-*.db-journal
-*.db-shm
-*.db-wal
 !uploads/.gitkeep
 !outputs/.gitkeep
 *.log

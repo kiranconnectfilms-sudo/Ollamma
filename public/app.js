@@ -5,26 +5,12 @@
   const MAX_MB = 25;
 
   const screens = {
-    gate: document.getElementById('screen-gate'),
     upload: document.getElementById('screen-upload'),
     processing: document.getElementById('screen-processing'),
     done: document.getElementById('screen-done'),
     error: document.getElementById('screen-error'),
   };
 
-  // --- Gate elements ---
-  const gateTabs = document.querySelectorAll('.gate-tab');
-  const panelRedeem = document.getElementById('gate-panel-redeem');
-  const panelRequest = document.getElementById('gate-panel-request');
-  const codeInput = document.getElementById('codeInput');
-  const redeemBtn = document.getElementById('redeemBtn');
-  const redeemError = document.getElementById('redeemError');
-  const emailInput = document.getElementById('emailInput');
-  const reasonInput = document.getElementById('reasonInput');
-  const requestBtn = document.getElementById('requestBtn');
-  const requestMessage = document.getElementById('requestMessage');
-
-  // --- Upload-screen elements ---
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
   const fileChip = document.getElementById('fileChip');
@@ -49,88 +35,12 @@
   const errorRetryBtn = document.getElementById('errorRetryBtn');
 
   let selectedFile = null;
-  // The access code accepted by the gate screen. Held only in memory —
-  // refreshing the page clears it, and the server treats every code as
-  // single-use anyway. Not put in localStorage on purpose: a stale code
-  // would just frustrate the user with "already used" errors next time.
-  let accessCode = null;
 
   function showScreen(name) {
     Object.entries(screens).forEach(([key, el]) => {
       el.classList.toggle('screen-active', key === name);
     });
   }
-
-  // --- Gate: tab switching ---
-  gateTabs.forEach((tab) => {
-    tab.addEventListener('click', () => {
-      gateTabs.forEach((t) => t.classList.remove('gate-tab-active'));
-      tab.classList.add('gate-tab-active');
-      const which = tab.dataset.tab;
-      panelRedeem.classList.toggle('hidden', which !== 'redeem');
-      panelRequest.classList.toggle('hidden', which !== 'request');
-      redeemError.classList.add('hidden');
-      requestMessage.classList.add('hidden');
-    });
-  });
-
-  // --- Gate: request access ---
-  requestBtn.addEventListener('click', async () => {
-    const email = (emailInput.value || '').trim();
-    const reason = (reasonInput.value || '').trim();
-    if (!email) {
-      requestMessage.textContent = 'Please enter your email.';
-      requestMessage.classList.remove('hidden');
-      return;
-    }
-
-    requestBtn.disabled = true;
-    requestMessage.classList.add('hidden');
-    try {
-      const res = await fetch('/api/request-access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, reason }),
-      });
-      const data = await res.json();
-      requestMessage.textContent = res.ok
-        ? (data.message || 'Request submitted. Check your email shortly.')
-        : (data.error || 'Could not submit your request.');
-      requestMessage.classList.remove('hidden');
-      if (res.ok) {
-        emailInput.value = '';
-        reasonInput.value = '';
-      }
-    } catch {
-      requestMessage.textContent = 'Could not reach the server. Try again in a moment.';
-      requestMessage.classList.remove('hidden');
-    } finally {
-      requestBtn.disabled = false;
-    }
-  });
-
-  // --- Gate: redeem code ---
-  // We don't actually consume the code here — that happens server-side when
-  // the user uploads a file. This step just validates the code shape so we
-  // can move them to the upload screen without a round-trip pinch point.
-  redeemBtn.addEventListener('click', () => {
-    const raw = (codeInput.value || '').trim().toUpperCase();
-    if (!raw) {
-      redeemError.textContent = 'Please enter your access code.';
-      redeemError.classList.remove('hidden');
-      return;
-    }
-    accessCode = raw;
-    redeemError.classList.add('hidden');
-    showScreen('upload');
-  });
-
-  codeInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      redeemBtn.click();
-    }
-  });
 
   function extOf(filename) {
     return (filename.split('.').pop() || '').toLowerCase();
@@ -232,7 +142,6 @@
     const formData = new FormData();
     formData.append('file', selectedFile);
     formData.append('instruction', instructionInput.value || '');
-    if (accessCode) formData.append('accessCode', accessCode);
 
     // Visual progression — the real work happens server-side in one request,
     // so we advance these as time-based hints rather than true progress events.
@@ -251,21 +160,10 @@
       clearTimeout(t1);
       clearTimeout(t2);
 
-      if (res.status === 401) {
-        // Code rejected — boot back to the gate so they can enter a new one.
-        accessCode = null;
-        showError(data.error || 'Your access code is no longer valid.');
-        return;
-      }
-
       if (!res.ok) {
         showError(data.error || 'Something went wrong while processing this file.');
         return;
       }
-
-      // Successful edit consumed the code; clear it so the next upload prompts
-      // for a new one rather than silently failing on the server.
-      accessCode = null;
 
       setStep('build');
       downloadBtn.href = `/api/download/${data.jobId}`;
@@ -296,17 +194,11 @@
 
   processBtn.addEventListener('click', processFile);
   errorRetryBtn.addEventListener('click', () => {
-    // If we still have a valid code in memory, go back to upload; otherwise
-    // the user needs a new code, so send them to the gate.
-    showScreen(accessCode ? 'upload' : 'gate');
+    showScreen('upload');
   });
   startOverBtn.addEventListener('click', () => {
     clearSelectedFile();
-    // The previous code was already consumed by the just-finished edit, so
-    // editing another file requires requesting/redeeming a fresh code.
-    showScreen('gate');
-    codeInput.value = '';
-    codeInput.focus();
+    showScreen('upload');
   });
 
   // --- AI configuration check ---

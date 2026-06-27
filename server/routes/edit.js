@@ -21,7 +21,6 @@ const { buildPdf } = require('../lib/builders/pdf');
 
 const { editDocumentBlocks, editSpreadsheet, editPresentation } = require('../lib/aiEdit');
 const { OllamaConfigError, OllamaApiError } = require('../lib/ollama');
-const access = require('../lib/access');
 
 const router = express.Router();
 
@@ -54,17 +53,6 @@ function cleanFilename(name) {
  * Returns { jobId, type, originalName } - actual file content is fetched via /api/download/:jobId
  */
 router.post('/edit', upload.single('file'), async (req, res) => {
-  // Access gate: every upload requires a one-time code obtained via the
-  // /request-access → admin approval → email flow. We validate here so
-  // unauthorized requests are rejected before any work; the code is
-  // actually consumed later, just before the AI call, so client-side
-  // errors (wrong file type, oversize) don't burn the user's code.
-  const submittedCode = req.body?.accessCode || req.headers['x-access-code'];
-  const validation = access.validateCode(submittedCode);
-  if (!validation.ok) {
-    return res.status(401).json({ error: validation.error });
-  }
-
   if (!req.file) {
     return res.status(400).json({ error: 'No file was uploaded.' });
   }
@@ -88,25 +76,8 @@ router.post('/edit', upload.single('file'), async (req, res) => {
   try {
     const baseName = cleanFilename(originalname);
 
-    // Idempotent helper: actually marks the access code as spent. Called
-    // after parsing succeeds (so a malformed file doesn't waste the code)
-    // but before the AI call (which is the expensive part). Wrapped so each
-    // branch can call it at the right moment without duplicating logic.
-    let codeConsumed = false;
-    const commitCode = () => {
-      if (codeConsumed) return;
-      const result = access.consumeCode(validation.code);
-      if (!result.ok) {
-        const err = new Error(result.error);
-        err.code = 'CODE_ALREADY_SPENT';
-        throw err;
-      }
-      codeConsumed = true;
-    };
-
     if (info.kind === 'document') {
       const { blocks } = await parseDocx(buffer);
-      commitCode();
       const editedBlocks = await editDocumentBlocks(blocks, instruction);
       const outBuffer = await buildDocx(editedBlocks, baseName);
       const jobId = createJob({ kind: 'document', buffer: outBuffer, filename: `${baseName}-edited.docx`, mime: info.mime });
@@ -115,7 +86,6 @@ router.post('/edit', upload.single('file'), async (req, res) => {
 
     if (info.kind === 'spreadsheet') {
       const { sheets } = await parseXlsx(buffer, false);
-      commitCode();
       const editedSheets = await editSpreadsheet(sheets, instruction);
       const outBuffer = await buildXlsx(editedSheets);
       const jobId = createJob({ kind: 'spreadsheet', buffer: outBuffer, filename: `${baseName}-edited.xlsx`, mime: info.mime });
@@ -125,7 +95,6 @@ router.post('/edit', upload.single('file'), async (req, res) => {
     if (info.kind === 'csv') {
       const text = buffer.toString('utf-8');
       const rows = parseCsv(text);
-      commitCode();
       const editedSheets = await editSpreadsheet([{ name: 'Sheet1', rows }], instruction);
       const outRows = editedSheets[0]?.rows || rows;
       const outBuffer = Buffer.from(rowsToCsv(outRows), 'utf-8');
@@ -135,7 +104,6 @@ router.post('/edit', upload.single('file'), async (req, res) => {
 
     if (info.kind === 'presentation') {
       const { slides } = await parsePptx(buffer);
-      commitCode();
       const editedSlides = await editPresentation(slides, instruction);
       const outBuffer = await buildPptx(editedSlides);
       const jobId = createJob({ kind: 'presentation', buffer: outBuffer, filename: `${baseName}-edited.pptx`, mime: info.mime });
@@ -144,7 +112,6 @@ router.post('/edit', upload.single('file'), async (req, res) => {
 
     if (info.kind === 'pdf') {
       const { blocks } = await parsePdf(buffer);
-      commitCode();
       const editedBlocks = await editDocumentBlocks(blocks, instruction);
       const outBuffer = await buildPdf(editedBlocks, baseName);
       const jobId = createJob({ kind: 'pdf', buffer: outBuffer, filename: `${baseName}-edited.pdf`, mime: info.mime });
@@ -154,7 +121,6 @@ router.post('/edit', upload.single('file'), async (req, res) => {
     if (info.kind === 'text') {
       const text = buffer.toString('utf-8');
       const { blocks } = parseTxt(text);
-      commitCode();
       const editedBlocks = await editDocumentBlocks(blocks, instruction);
       const outBuffer = Buffer.from(buildTxt(editedBlocks), 'utf-8');
       const jobId = createJob({ kind: 'text', buffer: outBuffer, filename: `${baseName}-edited.txt`, mime: info.mime });
@@ -182,7 +148,6 @@ function mapErrorStatus(err) {
   if (err instanceof OllamaConfigError) return 503;
   if (err instanceof OllamaApiError) return 502;
   if (err.code === 'CONTENT_TOO_LARGE') return 413;
-  if (err.code === 'CODE_ALREADY_SPENT') return 401;
   return 500;
 }
 
@@ -190,7 +155,6 @@ function describeError(err) {
   if (err instanceof OllamaConfigError) return err.message;
   if (err instanceof OllamaApiError) return `The local AI model couldn't process this request: ${err.body || err.message}`;
   if (err.code === 'CONTENT_TOO_LARGE') return err.message;
-  if (err.code === 'CODE_ALREADY_SPENT') return err.message;
   return `Something went wrong while processing this file: ${err.message}`;
 }
 

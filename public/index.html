@@ -18,37 +18,7 @@
   </header>
 
   <main>
-    <section id="screen-gate" class="screen screen-active">
-      <div class="intro">
-        <h1>Approved access only.</h1>
-        <p class="intro-sub">This tool isn't open to the public. Request access and the operator will email you a one-time code when approved.</p>
-      </div>
-
-      <div class="gate-card">
-        <div class="gate-tabs">
-          <button class="gate-tab gate-tab-active" data-tab="redeem" type="button">I have a code</button>
-          <button class="gate-tab" data-tab="request" type="button">Request access</button>
-        </div>
-
-        <div id="gate-panel-redeem" class="gate-panel">
-          <label for="codeInput">Access code <span class="optional-tag">single-use, valid for 1 hour</span></label>
-          <input id="codeInput" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" />
-          <button id="redeemBtn" class="btn-primary">Continue</button>
-          <p id="redeemError" class="gate-error hidden"></p>
-        </div>
-
-        <div id="gate-panel-request" class="gate-panel hidden">
-          <label for="emailInput">Your email</label>
-          <input id="emailInput" type="email" autocomplete="email" placeholder="you@example.com" />
-          <label for="reasonInput">Why you'd like access <span class="optional-tag">optional</span></label>
-          <textarea id="reasonInput" placeholder="Helps the operator decide — a sentence is plenty."></textarea>
-          <button id="requestBtn" class="btn-primary">Submit request</button>
-          <p id="requestMessage" class="gate-message hidden"></p>
-        </div>
-      </div>
-    </section>
-
-    <section id="screen-upload" class="screen">
+    <section id="screen-upload" class="screen screen-active">
       <div class="intro">
         <h1>Drop a file. Get it back better.<br/>Same format, same intent — sharper.</h1>
         <p class="intro-sub">Word stays Word. Excel stays Excel. PowerPoint stays PowerPoint. The AI polishes wording, structure, and formatting — your facts and figures don't move.</p>

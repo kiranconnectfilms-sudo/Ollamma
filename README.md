@@ -2,15 +2,10 @@
 
 Upload a Word, Excel, PowerPoint, PDF, or text file. A local AI model polishes
 the content — wording, grammar, structure, formatting — and you download it
-back in the **same file format** you uploaded. The model runs entirely on
-your own machine via [Ollama](https://ollama.com), so there's no API key and
-no per-request billing. Files are processed in memory and discarded after a
-single download.
-
-**Access is gated by the operator.** This isn't a public service — users
-request access by email, the operator (you) approves them from `/admin`, and
-the user gets a single-use, one-hour code that authorizes exactly one
-edit. See "Access flow" below.
+back in the **same file format** you uploaded. No login, no signup, no stored
+accounts, no API key, and no per-request billing — the model runs entirely on
+your own machine via [Ollama](https://ollama.com). Files are processed in
+memory and discarded after a single download.
 
 ## What this does (and doesn't) do
 
@@ -49,19 +44,6 @@ tested" below):
   fences, and falls back to extracting the first `{...}`/`[...]` block if the
   model adds stray commentary around the JSON — smaller local models do this
   more often than larger hosted ones.
-- **Access-control flow** exercised against the live HTTP server:
-  - `/admin` rejects no credentials (401) and wrong credentials (401), accepts
-    correct credentials (200).
-  - `/api/request-access` accepts valid email, rejects invalid/missing email.
-  - Admin approve generates a properly-formatted `XXXX-XXXX-XXXX` code and
-    persists it to the database with a 1-hour expiry (`CODE_TTL_MS` confirmed
-    `=== 3600000`).
-  - `/api/redeem` accepts a valid code once and **rejects the same code on
-    second use** — single-use guarantee holds across the atomic
-    `UPDATE … WHERE used_at IS NULL` consume step.
-  - `/api/edit` rejects requests with no code, an unknown code, or an
-    already-consumed code, all with 401 + a clear message.
-  - `validateCode` handles empty/null input without throwing.
 
 Two real bugs were found and fixed during this testing:
 - The original PPTX parser looked for `<p:ph type="title">` placeholder
@@ -72,12 +54,6 @@ Two real bugs were found and fixed during this testing:
   cannot read modern compressed cross-reference streams — including PDFs
   produced by this app's own `pdf-lib`-based builder. Replaced with the
   actively-maintained `pdfjs-dist` package.
-- The original access-code redemption consumed the code at the very start of
-  `/api/edit`, which meant a user could burn their single-use code by
-  uploading the wrong file type or a too-large file (both rejected before
-  any AI work happens). Split into `validateCode` (up-front check) and
-  `consumeCode` (atomic, called only after parsing succeeds), so the code is
-  only spent when the AI actually runs.
 
 **Not yet tested**: actual AI output quality against the local model end to
 end on real documents — only the request/response plumbing and error
@@ -85,15 +61,6 @@ handling were verified, not whether the edits are well-judged for any given
 real document. Quality will vary a lot by which model you pull; small models
 (e.g. `gemma3:4b`) are fast but less reliable at following the "preserve every
 fact, return the exact same JSON shape" instructions than larger ones.
-
-The access-flow verification above was done with an in-memory SQLite shim
-because the testing sandbox can't compile the native `better-sqlite3` module
-or fetch its prebuilt binaries. On a normal developer machine the prebuilt
-binary downloads cleanly and the same code runs against real on-disk SQLite —
-the SQL itself is plain ANSI, no shim-specific dialect. The denial flow
-(`/admin/requests/:id/deny`) is symmetric to approve and shares the same
-atomic-update pattern, but was not exercised end-to-end against the live
-server in this session.
 
 ## Setup
 
@@ -108,11 +75,7 @@ ollama pull gemma3:4b
 
 # 4. Install and start this app
 npm install
-cp .env.example .env
-# Edit .env and fill in:
-#   - ADMIN_USER / ADMIN_PASS (your login for the /admin review page)
-#   - SMTP_USER / SMTP_PASS  (Gmail + an app password — see .env.example)
-#   - APP_URL                (the public URL of the app — used in emails)
+cp .env.example .env    # defaults already point at localhost:11434 / gemma3:4b
 npm start
 ```
 
@@ -120,38 +83,7 @@ Then open **http://localhost:3000**.
 
 If Ollama isn't reachable, or the configured model hasn't been pulled yet,
 the app still starts and the UI loads, but upload is disabled with a clear
-on-screen message — it won't pretend to work and then fail silently. Same
-goes for missing admin credentials: the `/admin` page still serves a clear
-"set ADMIN_USER and ADMIN_PASS in .env" message rather than crashing.
-
-If SMTP isn't configured, the app still runs in a degraded mode: emails are
-logged to the server console (with the access code) instead of sent, so you
-can still hand-deliver the code while testing.
-
-## Access flow
-
-This app isn't open to the public. Every edit needs a one-time access code.
-
-1. **User visits `/`** and sees the gate screen. They can either submit their
-   email to request access, or paste a code they've already been given.
-2. **Server stores the request** in a small local SQLite database and emails
-   the operator (you) at `ADMIN_EMAIL` saying someone wants in.
-3. **Operator logs into `/admin`** (HTTP Basic Auth, credentials from `.env`),
-   sees the pending request, and clicks **Approve** or **Deny**.
-4. **Approve** generates a random `XXXX-XXXX-XXXX` code, stores it with a
-   1-hour expiry, and emails it to the user. **Deny** marks the request
-   denied and (politely) emails the user.
-5. **User pastes the code** on the gate screen and is moved to the upload
-   flow. The code is *not* consumed yet — it's just held in memory.
-6. **User uploads a file.** The server validates the code first, parses the
-   file, and only then atomically marks the code used (so a malformed file
-   doesn't burn the code). The AI edit runs once and the result is delivered.
-7. **Editing another file requires a new code** — codes are strictly
-   single-use. The "edit another" button on the success screen returns the
-   user to the gate.
-
-Codes expire 1 hour after issuance whether used or not. Denied requests have
-their codes invalidated immediately.
+on-screen message — it won't pretend to work and then fail silently.
 
 ## How a request flows
 
@@ -185,24 +117,17 @@ their codes invalidated immediately.
 
 ```
 server/
-  index.js               Express app entry point + Ollama health check
-  routes/edit.js         /api/edit and /api/download/:jobId (gated by access code)
-  routes/access.js       /api/request-access and /api/redeem
-  routes/admin.js        /admin HTML page + admin JSON API (basic auth)
+  index.js              Express app entry point
+  routes/edit.js         /api/edit and /api/download/:jobId
   lib/ollama.js          local model client via Ollama (chat + JSON-mode helper)
   lib/aiEdit.js          format-specific system prompts + AI calls
-  lib/access.js          access-request lifecycle: create/list/approve/deny/redeem
-  lib/db.js              SQLite database (access_requests, access_codes)
-  lib/mailer.js          Gmail SMTP via nodemailer (with console fallback)
   lib/fileTypes.js       extension → format metadata / routing
   lib/parsers/*.js       file → structured JSON
   lib/builders/*.js      structured JSON → file
 public/
-  index.html             gate / upload / processing / done / error screens
-  styles.css             design system (black & white)
-  app.js                 gate + drag-drop + state machine
-data/
-  docket.db              SQLite file, created on first run (gitignored)
+  index.html             single-page UI (upload / processing / done / error)
+  styles.css             design system
+  app.js                 drag-drop, fetch calls, state machine
 ```
 
 ## Known limitations worth knowing about
